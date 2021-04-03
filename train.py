@@ -13,15 +13,18 @@ from torch.utils.data import DataLoader
 from dataset import ctDataset
 
 sys.path.append(r'./backbone')
-#from resnet import ResNet  
+from resnet import ResNet  
 #from resnet_dcn import ResNet
 #from dlanet import DlaNet
-from dlanet_dcn import DlaNet
+# from dlanet_dcn import DlaNet
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0' 
+os.environ["CUDA_VISIBLE_DEVICES"] = '1' 
 use_gpu = torch.cuda.is_available()
 #model = ResNet(34)
-model = DlaNet(34)
+# model = DlaNet(34)
+class_num = 1
+heads = {'hm': class_num, 'wh': 2, 'ang':1, 'reg': 2}
+model = ResNet(50,heads=heads)
 print('cuda', torch.cuda.current_device(), torch.cuda.device_count())
 
 loss_weight={'hm_weight':1,'wh_weight':0.1,'ang_weight':0.1,'reg_weight':0.1}

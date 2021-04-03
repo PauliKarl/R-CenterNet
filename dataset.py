@@ -20,14 +20,16 @@ class ctDataset(data.Dataset):
     mean = np.array([0.5194416012442385,0.5378052387430711,0.533462090585746], dtype=np.float32).reshape(1, 1, 3)
     std  = np.array([0.3001546018824507, 0.28620901391179554, 0.3014112676161966], dtype=np.float32).reshape(1, 1, 3)
 
-    def __init__(self, data_dir='data', split='train'):
-        self.data_dir = os.path.join(data_dir, 'airplane')
-        self.img_dir = os.path.join(self.data_dir, 'images')
+    def __init__(self, data_dir='/data2/pd/sdc/shipdet/v1/coco/', split='train'):
+        self.data_dir = data_dir
+        
         try:
             if split == 'train':
-                self.annot_path = os.path.join(self.data_dir, 'annotations', 'train.json')
+                self.annot_path = os.path.join(self.data_dir, 'annotations', 'shipdet_trainval_v1.json')
+                self.img_dir = os.path.join(self.data_dir, 'trainval')
             elif split == 'val':
-                self.annot_path = os.path.join(self.data_dir, 'annotations', 'val.json')
+                self.annot_path = os.path.join(self.data_dir, 'annotations', 'shipdet_test_v1.json')
+                self.img_dir = os.path.join(self.data_dir, 'test')
         except:
             print('No any data!')
 
@@ -96,7 +98,8 @@ class ctDataset(data.Dataset):
         draw_gaussian = draw_umich_gaussian
         for k in range(num_objs):  # num_objs图中标记物数目  
             ann = anns[k]  # 第几个标记物的标签
-            bbox, an = coco_box_to_bbox(ann['bbox']) 
+            # bbox, an = coco_box_to_bbox(ann['bbox']) 
+            bbox, an = coco_seg_to_bbox(ann['segmentation'])
             cls_id = int(self.cat_ids[ann['category_id']]) 
             bbox[:2] = affine_transform(bbox[:2], trans_output)    # 将box坐标转换到 128*128内的坐标
             bbox[2:] = affine_transform(bbox[2:], trans_output)
@@ -222,7 +225,26 @@ def coco_box_to_bbox(box):
     bbox = np.array([box[0] - box[2]/2, box[1] - box[3]/2, box[0] + box[2]/2, box[1] + box[3]/2],dtype=np.float32)
     ang = float(box[4])
     return bbox, ang
-
+def coco_seg_to_bbox(seg):
+    box = pointobb2thetaobb(seg[0])
+    return coco_box_to_bbox(box)
+    
+def pointobb2thetaobb(pointobb):
+    """convert pointobb to thetaobb
+    Input:
+        pointobb (list[1x8]): [x1, y1, x2, y2, x3, y3, x4, y4]
+    Output:
+        thetaobb (list[1x5]):[cx, cy, w, h, theta]
+    """
+    pointobb = np.int0(np.array(pointobb))
+    pointobb.resize(4, 2)
+    rect = cv2.minAreaRect(pointobb)
+    x, y, w, h, theta = rect[0][0], rect[0][1], rect[1][0], rect[1][1], rect[2]
+    theta = theta / 180.0 * np.pi
+    thetaobb = [x, y, w, h, theta]
+    
+    
+    return thetaobb
 def affine_transform(pt, t):
     new_pt = np.array([pt[0], pt[1], 1.], dtype=np.float32).T
     new_pt = np.dot(t, new_pt)
