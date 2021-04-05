@@ -18,7 +18,7 @@ from resnet import ResNet
 #from dlanet import DlaNet
 # from dlanet_dcn import DlaNet
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '1' 
+os.environ["CUDA_VISIBLE_DEVICES"] = '3' 
 use_gpu = torch.cuda.is_available()
 #model = ResNet(34)
 # model = DlaNet(34)
@@ -35,7 +35,7 @@ if use_gpu:
     model.cuda()
 model.train()
 
-learning_rate = 1.25e-4
+learning_rate = 1.0e-3#0.001
 num_epochs = 150
 
 # different learning rate
@@ -49,7 +49,7 @@ optimizer = torch.optim.Adam(params, lr=learning_rate, weight_decay=1e-4)
 
 
 train_dataset = ctDataset(split='train')
-train_loader = DataLoader(train_dataset,batch_size=2,shuffle=False,num_workers=0)  # num_workers是加载数据（batch）的线程数目
+train_loader = DataLoader(train_dataset,batch_size=16,shuffle=False,num_workers=0)  # num_workers是加载数据（batch）的线程数目
 
 test_dataset = ctDataset(split='val')
 test_loader = DataLoader(test_dataset,batch_size=4,shuffle=False,num_workers=0)
