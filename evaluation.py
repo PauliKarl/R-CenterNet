@@ -199,8 +199,9 @@ def pre_recall(root_path, device, iou=0.5):
 
 
 if __name__ == '__main__':
-    model = ResNet(34)
-#    model = DlaNet(34)
+    class_num = 1
+    heads = {'hm': class_num, 'wh': 2, 'ang':1, 'reg': 2}
+    model = ResNet(50,heads=heads)
     device = torch.device('cuda')
     model.load_state_dict(torch.load('model\\res_dcn_34_best.pth'))
     model.eval()
@@ -208,3 +209,4 @@ if __name__ == '__main__':
     
     p, r, mang, miou = pre_recall('imgs', device)
     F1 = (2*p*r)/(p+r)
+    print()

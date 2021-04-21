@@ -11,13 +11,86 @@ import time
 import torch
 import numpy as np
 import torch.nn as nn
-from resnet_dcn import ResNet
-from dlanet_dcn import DlaNet
+import sys
+sys.path.append(r'./backbone')
+from resnet import ResNet
 from Loss import _gather_feat
 from PIL import Image, ImageDraw
 from dataset import get_affine_transform
 from Loss import _transpose_and_gather_feat
+def thetaobb2pointobb(thetaobb):
+    """convert thetaobb to pointobb
+    Input:
+        thetaobb (list[1x5]):[cx, cy, w, h, theta]
+    Output:
+        thetaobb: (list[1x8]):[x1, y1, x2, y2, x3, y3, x4, y4]
+    """
+    box = cv2.boxPoints(((thetaobb[0], thetaobb[1]), (thetaobb[2], thetaobb[3]), thetaobb[4] * 180.0 / np.pi))
+    box = np.reshape(box, [-1, ]).tolist()
+    pointobb = [box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7]]
 
+    return pointobb
+
+def show_rbbox(filename,result):
+    img = cv2.imread(filename)
+    w, h=img.shape[0],img.shape[1]
+
+    rbbox = []
+
+    for class_name,lx,ly,rx,ry,ang, prob in res:
+        result = [int((rx+lx)/2),int((ry+ly)/2),int(rx-lx),int(ry-ly),ang]
+        result=np.array(result)
+        x=int(result[0])
+        y=int(result[1])
+        height=int(result[2])
+        width=int(result[3])
+        anglePi = result[4]#/180 * math.pi
+        # anglePi = anglePi if anglePi <= math.pi else anglePi - math.pi
+        
+        rbbox = thetaobb2pointobb([x,y,width,height,anglePi+math.pi/2])#
+        print([x,y,width,height,anglePi+math.pi/2,prob])
+        # cosA = math.cos(anglePi)
+        # sinA = math.sin(anglePi)
+        
+        # x1=x-0.5*width   
+        # y1=y-0.5*height
+        
+        # x0=x+0.5*width 
+        # y0=y1
+        
+        # x2=x1            
+        # y2=y+0.5*height 
+        
+        # x3=x0   
+        # y3=y2
+        
+        # x0n= (x0 -x)*cosA -(y0 - y)*sinA + x
+        # y0n = (x0-x)*sinA + (y0 - y)*cosA + y
+        
+        # x1n= (x1 -x)*cosA -(y1 - y)*sinA + x
+        # y1n = (x1-x)*sinA + (y1 - y)*cosA + y
+        
+        # x2n= (x2 -x)*cosA -(y2 - y)*sinA + x
+        # y2n = (x2-x)*sinA + (y2 - y)*cosA + y
+        
+        # x3n= (x3 -x)*cosA -(y3 - y)*sinA + x
+        # y3n = (x3-x)*sinA + (y3 - y)*cosA + y
+        # rbbox =[x1,y1,x0,y0,x2,y2,x3,y3]
+
+        # print((x1, y1), (x2, y2))
+
+        # xmin = int(x-width/2)
+        # ymin = int(y-height/2)
+        # xmax = int(x+width/2)
+        # ymax = int(y+height/2)
+        # cv2.rectangle(img, (xmin, ymin), (xmax, ymax), (255,0,0), 2)
+        for idx in range(-1, 3, 1):
+            cv2.line(img, (int(rbbox[idx*2]), int(rbbox[idx*2+1])), (int(rbbox[(idx+1)*2]), int(rbbox[(idx+1)*2+1])), (255,0,0), thickness=2)
+
+    cv2.namedWindow('win_name', cv2.WINDOW_NORMAL)
+    cv2.imshow('win_name', img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 def draw(filename,result):
     img = Image.open(filename)
@@ -66,7 +139,7 @@ def draw(filename,result):
         draw.line([(x0n, y0n), (x3n, y3n)],fill=(255,0,0),width=5)
 #    plt.imshow(img)
 #    plt.show()
-    img.save(os.path.join('img_ret','dla_dcn_34_best_v2',os.path.split(filename)[-1]))
+    img.save(os.path.join('/data2/pd/sdc/shipdet/v1/works_dir/rcenter/','res50',os.path.split(filename)[-1]))
 
 def pre_process(image):
     height, width = image.shape[0:2]
@@ -216,30 +289,54 @@ def merge_outputs(detections):
 
 
 if __name__ == '__main__':
-#    model = ResNet(18)
-    model = DlaNet(34)
+    class_num = 1
+    heads = {'hm': class_num, 'wh': 2, 'ang':1, 'reg': 2}
+    model = ResNet(50,heads=heads)
+
     device = torch.device('cuda')
     
     model.load_state_dict(torch.load('best.pth'))
     model.eval()
     model.cuda()
-    for image_name in [os.path.join('imgs',f) for f in os.listdir('imgs')]:
-#        image_name = 'data/images/011.jpg'
-        if image_name.split('.')[-1] == 'jpg':
-            image = cv2.imread(image_name)
-            images, meta = pre_process(image)
-            images = images.to(device)
-            output, dets, forward_time = process(images, return_time=True)
-            
-            dets = post_process(dets, meta)
-            ret = merge_outputs(dets)
-            
-            res = np.empty([1,7])
-            for i, c in ret.items():
-                tmp_s = ret[i][ret[i][:,5]>0.3]
-                tmp_c = np.ones(len(tmp_s)) * (i+1)
-                tmp = np.c_[tmp_c,tmp_s]
-                res = np.append(res,tmp,axis=0)
-            res = np.delete(res, 0, 0)
-            res = res.tolist()
-            draw(image_name, res)  # 画旋转矩形
+    testdir = '/data2/pd/sdc/shipdet/v1/coco/test/'
+    resTxt = '/data2/pd/sdc/shipdet/v1/works_dir/rcenter/res50/ship.txt'
+    with open(resTxt,'w') as f:
+        for image_name in os.listdir(testdir):
+    #        image_name = 'data/images/011.jpg'
+            image_file = os.path.join(testdir,image_name)
+            if image_name.split('.')[-1] == 'png':
+                image = cv2.imread(image_file)
+                images, meta = pre_process(image)
+                images = images.to(device)
+                output, dets, forward_time = process(images, return_time=True)
+                
+                dets = post_process(dets, meta)
+                ret = merge_outputs(dets)
+                
+                res = np.empty([1,7])
+                for i, c in ret.items():
+                    tmp_s = ret[i][ret[i][:,5]>0.3]
+                    tmp_c = np.ones(len(tmp_s)) * (i+1)
+                    tmp = np.c_[tmp_c,tmp_s]
+                    res = np.append(res,tmp,axis=0)
+                res = np.delete(res, 0, 0)
+                res = res.tolist()
+                print(image_file)
+                show_rbbox(image_file, res)  # 画旋转矩形
+
+                # rbbox = []
+
+                # for class_name,lx,ly,rx,ry,ang, prob in res:
+                #     result = [int((rx+lx)/2),int((ry+ly)/2),int(rx-lx),int(ry-ly),ang]
+                #     result=np.array(result)
+                #     x=int(result[0])
+                #     y=int(result[1])
+                #     height=int(result[2])
+                #     width=int(result[3])
+                #     anglePi = result[4]#/180 * math.pi
+                #     # anglePi = anglePi if anglePi <= math.pi else anglePi - math.pi
+                #     print((x,y,width,height,anglePi))
+                #     rbbox = thetaobb2pointobb([x,y,width,height,anglePi+math.pi/2])
+                #     content = " ".join(map(str, rbbox))
+                #     content = image_name + ' ' + str(prob) + ' ' + content + '\n'
+                #     f.write(content)

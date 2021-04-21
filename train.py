@@ -18,16 +18,17 @@ from resnet import ResNet
 #from dlanet import DlaNet
 # from dlanet_dcn import DlaNet
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '3' 
+os.environ["CUDA_VISIBLE_DEVICES"] = '2' 
 use_gpu = torch.cuda.is_available()
 #model = ResNet(34)
 # model = DlaNet(34)
 class_num = 1
 heads = {'hm': class_num, 'wh': 2, 'ang':1, 'reg': 2}
 model = ResNet(50,heads=heads)
+model.load_state_dict(torch.load('v1.pth'))
 print('cuda', torch.cuda.current_device(), torch.cuda.device_count())
 
-loss_weight={'hm_weight':1,'wh_weight':0.1,'ang_weight':0.1,'reg_weight':0.1}
+loss_weight={'hm_weight':10,'wh_weight':10,'ang_weight':100,'reg_weight':100}
 criterion = CtdetLoss(loss_weight)
 
 device = torch.device("cuda")
@@ -35,7 +36,7 @@ if use_gpu:
     model.cuda()
 model.train()
 
-learning_rate = 1.0e-3#0.001
+learning_rate = 0.0015
 num_epochs = 150
 
 # different learning rate
